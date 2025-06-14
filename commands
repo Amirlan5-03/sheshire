@@ -1,0 +1,10 @@
+
+sd
+.\venv\Scripts\Activate.ps1
+Set-Location .\backend
+python manage.py runserver
+http://127.0.0.1:8000/person/1/
+http://127.0.0.1:8000/tree/
+http://127.0.0.1:8000/admin/
+.\venv\Scripts\Activate.ps1
+& c:/Users/user/Desktop/sheshire/venv/Scripts/Activate.ps1

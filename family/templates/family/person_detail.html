@@ -1,0 +1,59 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ person.name }}</title>
+  <link rel="stylesheet" href="{% static 'family/tree.css' %}">
+</head>
+<body>
+  <h1>
+    {{ person.name }}
+    {% if not person.is_alive %}
+      <span title="Умер(ла)">†</span>
+    {% endif %}
+  </h1>
+
+  {% if person.photo %}
+    <p><img src="{{ person.photo.url }}" alt="{{ person.name }}" width="200"></p>
+  {% else %}
+    <p><em>Фото не добавлено</em></p>
+  {% endif %}
+
+  <p><strong>Дата рождения:</strong>
+    {% if person.birth_date %}
+      {{ person.birth_date }}
+    {% else %}
+      неизвестна
+    {% endif %}
+  </p>
+
+  {% if person.contact_info %}
+    <p><strong>Контакты:</strong> {{ person.contact_info }}</p>
+  {% endif %}
+
+  {% if person.description %}
+    <h2>Биография</h2>
+    <p>{{ person.description|linebreaks }}</p>
+  {% endif %}
+
+  <h2>Родственные связи</h2>
+  <p><strong>Родители:</strong>
+    {% if parents %}
+      {{ parents|join:", " }}
+    {% else %}
+      нет
+    {% endif %}
+  </p>
+
+  <p><strong>Дети:</strong>
+    {% if children %}
+      {{ children|join:", " }}
+    {% else %}
+      нет
+    {% endif %}
+  </p>
+
+  <p><a href="{% url 'family:tree' %}">← Вернуться к древу</a></p>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Шежире семьи</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    /* ваши стили */
+    .link { fill: none; stroke: #888; stroke-width: 1.5px; }
+    .node circle { fill: #999; }
+    .node text { font: 12px sans-serif; fill: #000; }
+    .highlight circle { fill: orange !important; }
+    .highlight text { fill: red !important; font-weight: bold; }
+    #search { margin: 10px; padding: 5px; width: 300px; }
+    #search-container {
+      position: relative;
+      width: 300px;
+      margin: 10px;
+    }
+    #search {
+      width: 100%;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    #suggestions {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border: 1px solid #ccc;
+      border-top: none;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #fff;
+      position: absolute;
+      width: 100%;
+      z-index: 1000;
+    }
+    #suggestions li {
+      padding: 6px;
+      cursor: pointer;
+    }
+    #suggestions li:hover {
+      background: #eee;
+    }
+    #suggestions li.active {
+      background: #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>Шежире семьи</h1>
+
+  <div id="search-container">
+    <input id="search" type="text" placeholder="Поиск по имени…">
+    <ul id="suggestions" hidden></ul>
+  </div>
+
+  <div id="tree" style="width:100vw; height:80vh;"></div>
+  <script>
+    // Данные из Django
+    const nodesData = {{ nodes|safe }};
+    const edgesData = {{ edges|safe }};
+
+    // Построим map id→узел
+    const idToNode = {};
+    nodesData.forEach(n => idToNode[n.id] = { ...n, children: [] });
+    edgesData.forEach(e => {
+      if (idToNode[e.parent]) {
+        idToNode[e.parent].children.push(idToNode[e.child]);
+      }
+    });
+
+    // Находим корни
+    const childIds = new Set(edgesData.map(e => e.child));
+    const roots = nodesData
+      .filter(n => !childIds.has(n.id))
+      .map(n => idToNode[n.id]);
+
+    // Выбираем единственный корень или виртуальный
+    let treeData = roots.length === 1
+      ? roots[0]
+      : { name: "Родословная", children: roots };
+
+    // Размеры и отступы
+    const width = 800, height = 600;
+    const margin = { top: 40, right: 20, bottom: 20, left: 20 };
+
+    // Создаём SVG с viewBox для свободного пана
+    const svg = d3.select("#tree").append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("viewBox", [-margin.left, -margin.top, width + margin.left + margin.right, height + margin.top + margin.bottom])
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Зум и пан
+    const zoom = d3.zoom()
+      .scaleExtent([0.5, 2])
+      .on("zoom", (event) => svg.attr("transform", event.transform));
+    d3.select("#tree svg").call(zoom);
+
+    // Строим древо
+    const root = d3.hierarchy(treeData);
+    d3.tree().size([width, height])(root);
+
+    // Рисуем связи
+    svg.selectAll(".link")
+      .data(root.links())
+      .enter().append("path")
+      .attr("class", "link")
+      .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+    // Рисуем узлы
+    const node = svg.selectAll(".node")
+      .data(root.descendants())
+      .enter().append("g")
+      .attr("class", d => d.children ? "node node--internal" : "node node--leaf")
+      .attr("transform", d => `translate(${d.x},${d.y})`);
+
+    node.append("circle").attr("r", 5);
+    node.append("text")
+      .attr("dy", 20)
+      .attr("text-anchor", "middle")
+      .text(d => d.data.name);
+
+    // Клика по узлу — открываем профиль
+    node.on("click", (event, d) => {
+      window.location.href = `/person/${d.data.id}/`;
+    });
+    
+
+    // -------------------------
+    // Шаг 2. Логика поиска:
+    // -------------------------
+    const inputEl = document.getElementById('search');
+    const suggEl  = document.getElementById('suggestions');
+
+    // Массив {id, name} для поиска
+    const names = nodesData.map(n => ({ id: n.id, name: n.name }));
+
+    // При вводе в поле
+    inputEl.addEventListener('input', () => {
+      const term = inputEl.value.trim().toLowerCase();
+      suggEl.innerHTML = '';      // очищаем прошлые подсказки
+
+      if (!term) {
+        suggEl.hidden = true;
+        return;
+      }
+
+      // Ищем имена, начинающиеся с term
+      const matches = names.filter(n =>
+        n.name.toLowerCase().startsWith(term)
+      );
+      if (!matches.length) {
+        suggEl.hidden = true;
+        return;
+      }
+
+      // Создаём <li> для каждой подсказки
+      matches.forEach(n => {
+        const li = document.createElement('li');
+        li.textContent    = n.name;
+        li.dataset.id     = n.id;
+        suggEl.appendChild(li);
+      });
+      suggEl.hidden = false;
+    });
+
+    // Клик по подсказке — сразу переход
+    suggEl.addEventListener('click', e => {
+      if (e.target.tagName === 'LI') {
+        const id = e.target.dataset.id;
+        window.location.href = `/person/${id}/`;
+      }
+    });
+
+    // Клик вне поиска — скрыть подсказки
+    document.addEventListener('click', e => {
+      const container = document.getElementById('search-container');
+      if (!container.contains(e.target)) {
+        suggEl.hidden = true;
+      }
+    });
+  </script>
+</body>
+</html>
